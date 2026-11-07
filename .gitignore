@@ -1,0 +1,20 @@
+# Virtual environment
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+
+# IDE / System
+.vscode/
+.idea/
+.DS_Store
+
+# Do NOT ignore required project data and outputs
+!data/clean/
+!data/clean/*.csv
+!data/instamart.db
+!outputs/
+!outputs/*
+!state/
+
