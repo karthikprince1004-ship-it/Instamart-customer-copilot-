@@ -37,10 +37,19 @@ SELECT *, RANK() OVER(PARTITION BY city ORDER BY total_spend DESC) AS spend_rank
  ROW_NUMBER() OVER(PARTITION BY city ORDER BY total_spend DESC) AS row_num
 FROM spend;
 
--- Q7: daily running total
+-- -- Q7: Running total daily completed revenue
 WITH daily AS (
- SELECT substr(order_ts,1,10) AS day,SUM(order_amount) AS revenue
- FROM orders WHERE status='completed' GROUP BY substr(order_ts,1,10)
+    SELECT 
+        SUBSTR(order_ts, 1, 10) AS day,
+        ROUND(SUM(order_amount), 2) AS revenue
+    FROM orders
+    WHERE status = 'completed'
+    GROUP BY SUBSTR(order_ts, 1, 10)
 )
-SELECT day,revenue,SUM(revenue) OVER(ORDER BY day ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumulative_revenue
-FROM daily ORDER BY day;
+SELECT 
+    day,
+    revenue,
+    ROUND(SUM(revenue) OVER (ORDER BY day ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), 2) AS cumulative_revenue
+FROM daily
+ORDER BY day;
+

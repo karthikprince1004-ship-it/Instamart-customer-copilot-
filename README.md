@@ -90,6 +90,7 @@ python src/refund_agent.py
 - **Q4 (Zero Spend)**: 25 customers with zero completed orders.
 - **Q5 (CTE Above Average Spend)**: 550 customers above mean spend (INR 2,552.06).
 - **Q6 (Ranking Window Functions)**: Top spender per city (Mumbai lead: C0693 at INR 14,766.55). Exactly 8 rows show `RANK() != ROW_NUMBER()` due to customer spend ties.
+- **Q7 (Running Total)**: 183 daily rows; cumulative completed revenue reaches **INR 2,998,668.80** on day 183 (`SUM(revenue) OVER (ORDER BY day)`).
 
 ---
 
