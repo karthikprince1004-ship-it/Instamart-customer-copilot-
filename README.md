@@ -185,32 +185,55 @@ Both prompts enforce the `CLASSIFY` directive and require strict JSON output.
 
 ## Part D
 
-### Policy RAG Assistant
-- **Corpus**: 5 policy documents split into 15 chunks (40 words with 10-word overlap).
-- **Retrieval & Accuracy**: 12/12 (100%) on answerable queries using TF-IDF cosine similarity; 2/2 unanswerable queries correctly triggered the safe fallback disclaimer.
-- **Chunking Benchmark**: Overlap chunking preserved multi-sentence context boundaries, outperforming zero-overlap chunking on cross-sentence rules.
+### 1. Document Chunking & TF-IDF Retrieval (Tasks 1–3)
+- **Corpus Chunking**: 5 policy text files split into **15 chunks** (40 words with 10-word overlap):
+  - `refund_policy.txt`: 4 chunks
+  - `delivery_policy.txt`: 3 chunks
+  - `escalation_policy.txt`: 3 chunks
+  - `payment_policy.txt`: 3 chunks
+  - `privacy_policy.txt`: 2 chunks
+- **TF-IDF & Cosine Similarity**: Term Frequency (TF) measures how often a word appears in a chunk relative to chunk length, while Inverse Document Frequency (IDF) penalizes words common across all documents to amplify discriminative terms. A fundamental limitation is lexical vocabulary mismatch; queries with identical intent but alternative wording (e.g., "reimbursement" vs. "refund") score zero similarity without dense semantic embeddings.
+- **Top-3 Retrieval Check**: Query `"refund policy late delivery"` returns all top-3 chunks from `refund_policy.txt` (Reference matched).
 
-### Autonomous Refund Agent ReAct Loop
-Tested across all 7 benchmark scenarios from `data/raw/agent_scenarios.csv`:
+### 2. Retrieval & Grounding Evaluation Benchmark (Task 4)
+Evaluated across 14 benchmark questions from `data/raw/policy_eval.csv` (12 answerable, 2 out-of-scope):
 
-| Scenario | User Intent | Agent Outcome | Refund (INR) | Model Calls | Status |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **S1** | Late delivery (>45m) small order | REFUND | ₹128.25 | 5 | Success |
-| **S2** | Late delivery (>45m) small order | REFUND | ₹135.00 | 5 | Success |
-| **S3** | Late delivery (>45m) high value | ESCALATE | ₹1,999.00 | 5 | Human Lead Escalate |
-| **S4** | On-time delivery refund request | DENIED | ₹0.00 | 4 | Denied (Within SLA) |
-| **S5** | Cancelled order refund request | DENIED | ₹0.00 | 3 | Denied (Not Charged) |
-| **S6** | Non-existent order ID | NOT_FOUND | ₹0.00 | 2 | Not Found |
-| **S7** | Simulated cyclic policy loop | FALLBACK | ₹0.00 | 6 | `FALLBACK_MAX_ITERATIONS` |
+| Metric | 10-Word Overlap (Production) | 0-Word Overlap (Zero Overlap) |
+| :--- | :---: | :---: |
+| **Total Chunks** | 15 chunks | 13 chunks |
+| **Document Recall (Expected Doc in Top-3)** | **12 / 12** (100.0%) | **12 / 12** (100.0%) |
+| **Grounded Fact Accuracy** | **12 / 12** (100.0%) | **10 / 12** (83.3%) |
+| **Unanswerable Safe Fallback Rate** | **2 / 2** (100.0%) | **2 / 2** (100.0%) |
 
-### Safety Boundaries & State Persistence Demonstrations
-- **Token Limit Stop**: S1 run with `token_limit=200` halted before executing tool calls with status `FALLBACK_TOKEN_LIMIT`.
-- **Timeout Stop**: S1 run with `time_limit_seconds=0` halted before first model call with status `FALLBACK_TIMEOUT`.
-- **Crash & Resume Demonstration**: S1 crashed deliberately after step 2 checkpoint (`search_policy`). Resumed via `resume_agent(run_id)` without duplicating steps. Executed tools in exact order: `get_order` → `search_policy` → `[CRASH & RESUME]` → `calculate_refund` → `issue_refund` (Final status: REFUND ₹128.25).
-- **Logs**: Saved to `outputs/agent_runs.jsonl`, `outputs/refund_ledger.jsonl`, and `state/`.
+> **Chunk Boundary Failure (Zero Overlap):**  
+> Under zero overlap, the question *"What delivery time makes a completed order eligible for a full refund?"* failed to extract the expected fact `"more than 45 minutes"`. Without overlap, the conditional phrase was severed across chunk boundaries, yielding only the trailing clause (`"receives a full refund of the order amount."`). The 10-word overlap preserved context across sentence boundaries and achieved 100% grounded accuracy.
+
+### 3. Autonomous Refund Agent ReAct Benchmark (Task 6)
+Evaluated across all 7 benchmark scenarios from `data/raw/agent_scenarios.csv`:
+
+| Scenario ID | Status | Refund Amount (INR) | Model Calls | Tokens Used |
+| :---: | :---: | :---: | :---: | :---: |
+| **S1** | REFUND | ₹128.25 | 5 | 927 |
+| **S2** | REFUND | ₹135.00 | 5 | 927 |
+| **S3** | ESCALATE | ₹1,999.00 | 5 | 914 |
+| **S4** | DENIED | ₹0.00 | 4 | 629 |
+| **S5** | DENIED | ₹0.00 | 3 | 355 |
+| **S6** | NOT_FOUND | ₹0.00 | 2 | 84 |
+| **S7** | FALLBACK_MAX_ITERATIONS | ₹0.00 | 6 | 3,036 |
+
+*S1 took exactly 5 model calls and refunded ₹128.25. Under the default `token_limit=6000`, S7 completed all 6 model calls without premature termination.*
+
+### 4. Safety Stops & Resumable Checkpoints (Tasks 7 & 8)
+- **Token Limit Stop**: S1 evaluated with `token_limit=200` halted before executing tool calls with status `FALLBACK_TOKEN_LIMIT`.
+- **Timeout Stop**: S1 evaluated with `time_limit_seconds=0` halted before the first model call with status `FALLBACK_TIMEOUT`.
+- **Crash & Resume Demonstration**: S1 crashed deliberately after step 2 (`search_policy`) and was resumed via `resume_agent(run_id)`:
+  - **Tool execution sequence**: `get_order` → `search_policy` → `[CRASH & RESUME]` → `calculate_refund` → `issue_refund` (4 executions total, none repeated).
+  - **Final status**: `REFUND` with ₹128.25.
+- **Persistent Logs**: Stored in `outputs/agent_runs.jsonl`, `outputs/refund_ledger.jsonl`, and `state/`.
 
 ---
-### ReAct vs. Plan-and-Execute Architecture (Task 9)
+
+### 5. ReAct vs. Plan-and-Execute Architecture (Task 9)
 > **Comparative Analysis (Under 250 words):**  
 > In our quick-commerce refund workflow, the **ReAct (Reason + Act)** pattern interleaves model reasoning with immediate tool observations, while a **Plan-and-Execute** architecture generates an entire multi-step plan up front and executes tools sequentially, replanning only upon failure.
 > 
@@ -219,11 +242,3 @@ Tested across all 7 benchmark scenarios from `data/raw/agent_scenarios.csv`:
 > However, plan-and-execute degrades significantly when encountering runtime branch surprises. In S6 (`NOT_FOUND`), a pre-planned schedule (`get_order` → `search_policy` → `calculate_refund` → `issue_refund`) attempts to execute downstream tools on null data or triggers an expensive replanning cycle. In contrast, ReAct immediately inspects the `{"error": "Order not found"}` observation from `get_order` and halts dynamically in 2 calls without calling refund calculations. 
 > 
 > Furthermore, under infinite loops (S7), plan-and-execute can loop during replanning cycles if error feedback is ambiguous, whereas our ReAct implementation enforces deterministic iteration and token tripwires that safely terminate cyclic prompts without human intervention.
-
-
-## Limitations and Next Steps
-
-1. **Synthetic Data Boundaries**: Orders and ticket logs are synthetically generated and do not model complex multi-item split deliveries or extreme weather route disruptions.
-2. **Post-Hoc Retention Flag**: The `is_premium` label in `outputs/retention_list.csv` is derived from full-period RFM metrics (including the September evaluation window); it serves as an operational campaign list rather than a strictly leakage-free evaluation artifact.
-3. **Sparse vs. Dense Retrieval**: The offline TF-IDF retriever relies on keyword lexical matching. Integrating dense vector embeddings (e.g., local sentence-transformers) would improve semantic understanding of colloquial refund queries.
-4. **Tool Set Expansion**: Extending the refund agent to support payment gateway reconciliation, customer address verification, and delivery photo inspection.
