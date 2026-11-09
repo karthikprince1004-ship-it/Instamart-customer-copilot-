@@ -242,3 +242,9 @@ Evaluated across all 7 benchmark scenarios from `data/raw/agent_scenarios.csv`:
 > However, plan-and-execute degrades significantly when encountering runtime branch surprises. In S6 (`NOT_FOUND`), a pre-planned schedule (`get_order` → `search_policy` → `calculate_refund` → `issue_refund`) attempts to execute downstream tools on null data or triggers an expensive replanning cycle. In contrast, ReAct immediately inspects the `{"error": "Order not found"}` observation from `get_order` and halts dynamically in 2 calls without calling refund calculations. 
 > 
 > Furthermore, under infinite loops (S7), plan-and-execute can loop during replanning cycles if error feedback is ambiguous, whereas our ReAct implementation enforces deterministic iteration and token tripwires that safely terminate cyclic prompts without human intervention.
+
+## Limitations and Next Steps
+- **Data Fidelity**: All pipelines run on synthetic distributions without live store latency or driver GPS tracking.
+- **Lexical Matching**: TF-IDF retrieval depends on exact token overlap and misses synonyms without dense embeddings.
+- **Single-Turn Triage**: Ticket triage evaluates individual messages without multi-turn conversation context.
+- **Next Steps**: Introduce semantic dense vector search (e.g., embeddings), multi-turn dialog memory, and automated ERP webhook reconciliation.
