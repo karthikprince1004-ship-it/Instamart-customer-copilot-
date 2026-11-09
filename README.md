@@ -244,7 +244,8 @@ Evaluated across all 7 benchmark scenarios from `data/raw/agent_scenarios.csv`:
 > Furthermore, under infinite loops (S7), plan-and-execute can loop during replanning cycles if error feedback is ambiguous, whereas our ReAct implementation enforces deterministic iteration and token tripwires that safely terminate cyclic prompts without human intervention.
 
 ## Limitations and Next Steps
-- **Data Fidelity**: All pipelines run on synthetic distributions without live store latency or driver GPS tracking.
-- **Lexical Matching**: TF-IDF retrieval depends on exact token overlap and misses synonyms without dense embeddings.
-- **Single-Turn Triage**: Ticket triage evaluates individual messages without multi-turn conversation context.
-- **Next Steps**: Introduce semantic dense vector search (e.g., embeddings), multi-turn dialog memory, and automated ERP webhook reconciliation.
+
+- **Synthetic Distribution Constraints**: The dataset simulates quick-commerce behavior with a fixed 6-month window (13,084 raw orders across 1,200 users) and does not capture live variables such as dynamic traffic congestion, rain surges, or multi-store stockouts.
+- **Lexical Retrieval Limitations**: The Policy RAG assistant relies on TF-IDF cosine similarity, which works well for exact keyword matching but cannot resolve semantic synonyms (e.g., "reimbursement" vs. "refund") without dense vector embeddings.
+- **Single-Turn Triage & Deterministic Mocking**: Ticket classification and agent tools evaluate isolated customer turns using a deterministic mock LLM; multi-turn dialog history and edge-case negotiation are not yet modeled.
+- **Next Steps & Production Scaling**: Integrate dense vector retrieval (e.g., OpenAI/sentence-transformers embeddings), deploy real-time webhook listeners for order events, add multi-turn conversation memory, and link automated ledger writes to core banking/payment gateways.
