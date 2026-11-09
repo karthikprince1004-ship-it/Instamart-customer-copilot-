@@ -135,16 +135,51 @@ python src/refund_agent.py
 
 ## Part C
 
-### Privacy Guardrails & Triage Pipeline
-- **Input Screening**: 164 total tickets; 4 skipped empty, 4 flagged long, 156 passed for processing.
-- **PII Masking**: Successfully redacted 55 email addresses, 91 phone numbers, and 132 order IDs using ordered regex rules.
-- **Resilience**: 19 transient 503 errors caught and automatically resolved via exponential backoff retries.
+### 1. Input Guardrails & PII Redaction
+- **Screening & Guardrails (Task 1)**: Evaluated all 164 support tickets.
+  - **Empty tickets (`skipped_empty`)**: **4 tickets** (`T0157`, `T0158`, `T0159`, `T0160`) contain no text/whitespace and were halted before model invocation (0 tokens used).
+  - **Long tickets (`flagged_long`)**: **4 tickets** (`T0161`, `T0162`, `T0163`, `T0164`) each estimate to **734 tokens** (exceeding `MAX_INPUT_TOKENS = 400`) and were halted before model invocation (0 tokens used).
+  - **Eligible tickets**: **156 tickets** sent to triage pipeline.
+- **PII Redaction (Task 2)**: Applied ordered regex transformations (`[EMAIL]` -> `[PHONE]` -> `[ORDER_ID]`).
+  - Redacted **55 email addresses**, **91 phone numbers**, and **132 order IDs** (**278 substitutions total**).
+  - Re-applying all three regex patterns to redacted texts confirmed **0 remnants left**.
 
-### Evaluation & Segment-Based Routing
-- **Output Validation**: 135 valid JSON parses, 12 keyword fallback triggers, 9 flagged invalid outputs.
-- **Prompt Performance**: Zero-shot accuracy = **85.7%**; Few-shot accuracy = **100.0%**.
-- **Token Budget Demonstration**: Run with 6,000 token limit safely stopped after budget exhaustion, routing 58 tickets to `human_review` in `outputs/triage_budget_demo.csv`.
-- **Final Routing (`outputs/triage_results.csv`)**: Integrated Part B segment data to route fraud tickets to `security_team` (HIGH priority), premium customer issues to `premium_desk` (HIGH priority), and standard tickets to `support_queue`.
+### 2. Resilient Execution & Response Validation
+- **Transient Error Resilience (Task 4)**: Across 156 model calls, caught exactly **19 TransientLLMError** (503 server busy) exceptions. All 19 were recovered on retry attempt 0 with exponential backoff and jitter (delays between 0.0450s and 0.0575s). Zero permanent failures.
+- **Output Validation (Task 5)**:
+  - `classified_json`: **135 tickets** parsed as valid JSON with category in allowed list.
+  - `classified_keyword`: **12 tickets** parsed via regex lowercase word extraction (`re.findall(r"[a-z]+", text.lower())`).
+  - `flagged_invalid_output`: **9 tickets** routed safely to `human_review`.
+  - Total classified: **147 tickets** (135 JSON + 12 keyword).
+
+### 3. Zero-Shot vs. Few-Shot Comparison (Task 6)
+Both prompts enforce the `CLASSIFY` directive and require strict JSON output.
+
+| Metric | Zero-Shot Run | Few-Shot Run | Reference |
+| :--- | :--- | :--- | :--- |
+| **Tickets Classified** | 147 / 156 | 147 / 156 | 147 |
+| **Accuracy** | **85.7%** (126 / 147) | **100.0%** (147 / 147) | 85.7% vs 100.0% |
+| **Total Tokens** | 10,180 | 25,312 | - |
+| **Tokens / Classified Ticket** | 69.3 | 172.2 | - |
+
+#### Zero-Shot Confusion Matrix
+| Actual \ Predicted | billing | delivery | fraud | technical |
+| :--- | :---: | :---: | :---: | :---: |
+| **billing** | 38 | 0 | 0 | 0 |
+| **delivery** | 0 | 36 | 0 | 0 |
+| **fraud** | **11** | 0 | 23 | 0 |
+| **technical** | **10** | 0 | 0 | 29 |
+
+> **Cost vs. Quality Tradeoff:**  
+> The few-shot prompt consumes ~2.5× more tokens per ticket (172.2 vs. 69.3 tokens), adding roughly 103 tokens per ticket. However, zero-shot misclassifies 11 fraud tickets and 10 technical tickets as billing because payment-related vocabulary in customer complaints overrides subtle account takeover or app-crash cues. In quick commerce, routing account compromise tickets to a standard billing queue severely delays fraud containment and increases financial risk. The 14.3 percentage-point accuracy gain (85.7% to 100.0%) and complete elimination of fraud leakage overwhelmingly justify the additional token cost.
+
+### 4. Token Budget & Segment-Based Routing (Task 7)
+- **Token Budget Demonstration (`outputs/triage_budget_demo.csv`)**: Evaluated zero-shot pipeline with `TOKEN_BUDGET = 6,000`. Execution safely halted when cumulative usage reached the ceiling, marking **64 tickets** as `budget_exhausted` and routing them to `human_review`.
+- **Production Triage Results (`outputs/triage_results.csv`)**: Generated from few-shot pipeline (`TOKEN_BUDGET = 100,000`) across all **164 rows** using Part B customer segments:
+  - `support_queue` (NORMAL priority): **102 tickets** (standard inquiries)
+  - `security_team` (HIGH priority): **34 tickets** (all fraud issues)
+  - `human_review` (NORMAL priority): **17 tickets** (4 empty, 4 long, 9 invalid output)
+  - `premium_desk` (HIGH priority): **11 tickets** (non-fraud issues from `is_premium = True` customers)
 
 ---
 
