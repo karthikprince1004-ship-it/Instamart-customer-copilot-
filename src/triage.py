@@ -71,6 +71,42 @@ FEW_SHOT_PROMPT = (
     "Ticket: 'Order was supposed to arrive in 15 minutes but rider is delayed.' -> {\"category\": \"delivery\", \"reason\": \"delivery delay\"}"
 )
 
+# Task 3: Zero-shot System Prompt
+# Must contain 'CLASSIFY', list the 4 categories, require JSON, NO 'EXAMPLES:'
+ZERO_SHOT_SYSTEM_PROMPT = """You are an automated support assistant for an online grocery app.
+Your task is to CLASSIFY the customer support ticket into exactly one of these four categories:
+1. billing
+2. delivery
+3. technical
+4. fraud
+
+You must reply with a valid JSON object ONLY, in this exact format:
+{"category": "<one_of_the_four_categories>", "reason": "<short_explanation>"}
+Do not include any extra text, markdown formatting, or preamble outside the JSON object.
+"""
+
+# Task 3: Few-shot System Prompt
+# Must contain 'CLASSIFY', list the 4 categories, require JSON, line 'EXAMPLES:' with >=2 examples (one fraud)
+FEW_SHOT_SYSTEM_PROMPT = """You are an automated support assistant for an online grocery app.
+Your task is to CLASSIFY the customer support ticket into exactly one of these four categories:
+1. billing
+2. delivery
+3. technical
+4. fraud
+
+EXAMPLES:
+Ticket: "Someone used my card to place an unauthorized order without an OTP."
+{"category": "fraud", "reason": "unauthorized card transaction detected"}
+
+Ticket: "The delivery rider is late by over 45 minutes and won't pick up."
+{"category": "delivery", "reason": "delayed parcel arrival"}
+
+You must reply with a valid JSON object ONLY, in this exact format:
+{"category": "<one_of_the_four_categories>", "reason": "<short_explanation>"}
+Do not include any extra text, markdown formatting, or preamble outside the JSON object.
+"""
+
+
 # Tasks 4 & 5: Model Call with Exponential Backoff/Jitter & Validation
 def call_model_with_retry(messages: list, ticket_id: str) -> object:
     for n in range(3):

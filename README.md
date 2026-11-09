@@ -144,6 +144,12 @@ python src/refund_agent.py
   - Redacted **55 email addresses**, **91 phone numbers**, and **132 order IDs** (**278 substitutions total**).
   - Re-applying all three regex patterns to redacted texts confirmed **0 remnants left**.
 
+  ### 2. Zero-Shot vs. Few-Shot Prompt Design (Task 3)
+- **Zero-Shot Prompt**: Contains the directive `CLASSIFY`, specifies the four categories (`billing`, `delivery`, `technical`, `fraud`), mandates strict JSON output `{"category": "...", "reason": "..."}`, and contains **no** `EXAMPLES:` marker.
+- **Few-Shot Prompt**: Shares the same system instructions but introduces an explicit `EXAMPLES:` block containing two labeled exemplars (including an unauthorized card transaction demonstrating the `fraud` category).
+- **Behavioral Impact**: The few-shot prompt prioritizes `fraud` resolution over generic billing keywords during boundary tie-breaks, accurately escalating security tickets.
+
+
 ### 2. Resilient Execution & Response Validation
 - **Transient Error Resilience (Task 4)**: Across 156 model calls, caught exactly **19 TransientLLMError** (503 server busy) exceptions. All 19 were recovered on retry attempt 0 with exponential backoff and jitter (delays between 0.0450s and 0.0575s). Zero permanent failures.
 - **Output Validation (Task 5)**:
