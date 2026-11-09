@@ -92,6 +92,20 @@ python src/refund_agent.py
 - **Q6 (Ranking Window Functions)**: Top spender per city (Mumbai lead: C0693 at INR 14,766.55). Exactly 8 rows show `RANK() != ROW_NUMBER()` due to customer spend ties.
 - **Q7 (Running Total)**: 183 daily rows; cumulative completed revenue reaches **INR 2,998,668.80** on day 183 (`SUM(revenue) OVER (ORDER BY day)`).
 
+### Pandas Cross-Check & Exploratory Analysis
+- **Q2 Pivot Cross-Check**: `pd.pivot_table(..., margins=True)` grand total equals exactly **INR 2,998,668.80**, matching the SQL total across all 30 city-category cells.
+- **City Aggregations (`groupby` completed orders)**:
+  - *Bengaluru*: Sum INR 523,643.40 | Mean INR 276.47 | Count 1,894
+  - *Mumbai*: Sum INR 479,058.50 | Mean INR 297.00 | Count 1,613
+  - *Delhi-NCR*: Sum INR 508,412.30 | Mean INR 265.91 | Count 1,912
+- **Distribution & Outlier Fences (`order_amount`)**:
+  - Mean: INR 269.91 vs. Median: INR 135.00 (heavily right-skewed, skewness = 4.61).
+  - Q1: INR 64.80 | Q3: INR 297.00 | IQR: INR 232.20.
+  - Fences: Lower = -INR 283.50 (0 outliers below) | Upper = INR 645.30 (897 outliers above).
+
+> **Exploratory Data Analysis Summary (Under 200 words):**  
+> This dataset records quick-commerce grocery and household transactions across six Indian metropolitan markets. Order spend exhibits a pronounced right-skewed distribution where the median purchase is modest (INR 135.00) while bulk grocery runs and electronics purchases stretch the mean to INR 269.91 with skewness of 4.61. The 1.5×IQR upper fence identifies 897 high-value outliers (above INR 645.30), representing legitimate high-ticket orders rather than data entry anomalies. Delivery times center around 30 minutes with completed orders capped under SLA thresholds. Across completed transactions, the correlation matrix reveals that order amount has a slight negative correlation with discount percentage (r ≈ -0.095) and a slight positive correlation with item quantity (r ≈ +0.087), while delivery minutes remain virtually uncorrelated with basket size (r ≈ -0.012). The strongest linear association exists between order amount and discount percentage (-0.095). However, a correlation of this modest magnitude does not establish causation: promotional discounts may be selectively targeted at lower-priced staple items rather than directly causing smaller checkout totals.
+
 ---
 
 ## Part B
@@ -161,6 +175,16 @@ Tested across all 7 benchmark scenarios from `data/raw/agent_scenarios.csv`:
 - **Logs**: Saved to `outputs/agent_runs.jsonl`, `outputs/refund_ledger.jsonl`, and `state/`.
 
 ---
+### ReAct vs. Plan-and-Execute Architecture (Task 9)
+> **Comparative Analysis (Under 250 words):**  
+> In our quick-commerce refund workflow, the **ReAct (Reason + Act)** pattern interleaves model reasoning with immediate tool observations, while a **Plan-and-Execute** architecture generates an entire multi-step plan up front and executes tools sequentially, replanning only upon failure.
+> 
+> Across our benchmark runs, ReAct required dynamic call counts scaling with intent ambiguity: straightforward cases exited early (2 calls for S6 non-existent orders; 3 calls for S5 cancelled orders), while full late-delivery validations required 5 calls (S1, S2, S4) and cyclic edge cases halted at 6 iterations. A plan-and-execute model uses fewer upfront planning calls (1 plan generation + 1 final synthesis = ~2 calls) and fewer cumulative tokens for ideal paths. 
+> 
+> However, plan-and-execute degrades significantly when encountering runtime branch surprises. In S6 (`NOT_FOUND`), a pre-planned schedule (`get_order` → `search_policy` → `calculate_refund` → `issue_refund`) attempts to execute downstream tools on null data or triggers an expensive replanning cycle. In contrast, ReAct immediately inspects the `{"error": "Order not found"}` observation from `get_order` and halts dynamically in 2 calls without calling refund calculations. 
+> 
+> Furthermore, under infinite loops (S7), plan-and-execute can loop during replanning cycles if error feedback is ambiguous, whereas our ReAct implementation enforces deterministic iteration and token tripwires that safely terminate cyclic prompts without human intervention.
+
 
 ## Limitations and Next Steps
 
